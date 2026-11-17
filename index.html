@@ -558,11 +558,16 @@ canvas.addEventListener('pointerup', (event) => {
     return;
   }
 
-  // ¿tocaste el agujero negro?
-  const holeHits = stickerRaycaster.intersectObject(blackHoleCore, false);
+  // ¿tocaste el agujero negro o el corazón?
+  const holeHits = stickerRaycaster.intersectObject(loveHeartHit, false);
   if (holeHits.length > 0) {
     focusedSticker = null;
-    showLoveHeart(!loveHeartVisible);
+
+    if (loveHeartVisible) {
+      loveHeartVisible = false;
+    } else {
+      showLoveHeart(true, NAME_MESSAGE);
+    }
     return;
   }
 
@@ -642,36 +647,47 @@ function spawnHearts(origin, count, speed) {
 function createMessageTexture(lines) {
   const msgCanvas = document.createElement('canvas');
   msgCanvas.width = 1024;
-  msgCanvas.height = 384;
+  msgCanvas.height = 512;
   const ctx = msgCanvas.getContext('2d');
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 62px Arial';
-  ctx.shadowColor = 'rgba(255, 45, 120, 0.95)';
-  ctx.shadowBlur = 26;
-  ctx.fillStyle = '#fff2f8';
 
-  const lineHeight = 76;
-  const startY = 192 - ((lines.length - 1) * lineHeight) / 2;
+  const lineHeight = 120;
+  const startY = 256 - ((lines.length - 1) * lineHeight) / 2;
 
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], 512, startY + i * lineHeight);
+    const line = lines[i];
+
+    ctx.font = 'bold ' + line.size + 'px Arial';
+    ctx.shadowColor = 'rgba(255, 45, 120, 0.95)';
+    ctx.shadowBlur = line.size * 0.42;
+    ctx.fillStyle = '#fff2f8';
+    ctx.fillText(line.text, 512, startY + i * lineHeight);
   }
 
   return new THREE.CanvasTexture(msgCanvas);
 }
 
-const LOVE_MESSAGE = ['Mi universo eres tú'];
-const FINALE_MESSAGE = ['10 fotos, 10 notas...', 'y mil razones para amarte'];
+const NAME_MESSAGE = [
+  { text: 'Celisbeth', size: 132 },
+  { text: 'Te quiero mi Bebe', size: 64 }
+];
+const FINALE_MESSAGE = [
+  { text: '10 fotos, 10 notas...', size: 76 },
+  { text: 'y mil razones para amarte', size: 76 }
+];
 
 const loveMessage = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: createMessageTexture(LOVE_MESSAGE),
+  map: createMessageTexture(NAME_MESSAGE),
   transparent: true,
   depthWrite: false,
+  depthTest: false,
   opacity: 0
 }));
-loveMessage.scale.set(1.55, 0.58, 1);
+loveMessage.scale.set(2.0, 1.0, 1);
+loveMessage.position.set(0, 1.28, 0);
+loveMessage.renderOrder = 20;
 loveMessage.visible = false;
 scene.add(loveMessage);
 
@@ -720,6 +736,14 @@ scene.add(loveHeartGroup);
 
 let loveHeartVisible = false;
 let loveHeartAmount = 0;
+let blackHoleAmount = 1;
+
+// Zona invisible para tocar el corazón / agujero negro
+const loveHeartHit = new THREE.Mesh(
+  new THREE.SphereGeometry(0.85, 16, 16),
+  new THREE.MeshBasicMaterial({ visible: false })
+);
+scene.add(loveHeartHit);
 
 function setLoveMessage(lines) {
   loveMessage.material.map = createMessageTexture(lines);
@@ -915,6 +939,7 @@ let lastFrameTime = 0;
 const focusDirection = new THREE.Vector3();
 const focusPosition = new THREE.Vector3();
 const cameraDown = new THREE.Vector3();
+const cameraUp = new THREE.Vector3();
 
 const tick = () => {
   const elapsedTime = clock.getElapsedTime();
@@ -925,9 +950,8 @@ const tick = () => {
   galaxy.rotation.y = elapsedTime * 0.05;
   starRing.rotation.y = -elapsedTime * 0.08;
 
-  // Agujero negro: disco girando y halo que respira
+  // Agujero negro: disco girando
   accretionDisk.rotation.y = elapsedTime * 0.7;
-  glowSprite.material.opacity = 0.8 + Math.sin(elapsedTime * 2.0) * 0.15;
 
   // Stickers girando con el espiral + zoom al tocarlos
   camera.getWorldDirection(focusDirection);
@@ -1003,24 +1027,28 @@ const tick = () => {
     burstGeometry.attributes.color.needsUpdate = true;
   }
 
-  // Corazón gigante frente a la cámara
+  // El corazón sale justo del centro, donde está la bola negra
   loveHeartAmount += ((loveHeartVisible ? 1 : 0) - loveHeartAmount) * Math.min(1, dt * 5);
+  blackHoleAmount += ((loveHeartVisible ? 0 : 1) - blackHoleAmount) * Math.min(1, dt * 6);
+
+  blackHoleCore.scale.setScalar(Math.max(0.0001, blackHoleAmount));
+  accretionDisk.material.opacity = 0.9 * blackHoleAmount;
+  glowSprite.material.opacity = (0.8 + Math.sin(elapsedTime * 2.0) * 0.15) * blackHoleAmount;
 
   loveHeartGroup.visible = loveHeartAmount > 0.01;
   loveMessage.visible = loveHeartAmount > 0.05;
 
   if (loveHeartGroup.visible) {
     const pulse = 1 + Math.sin(elapsedTime * 3) * 0.05;
-    const heartScale = loveHeartAmount * 1.3 * pulse;
+    const heartScale = loveHeartAmount * 1.6 * pulse;
 
-    loveHeartGroup.position.copy(camera.position).addScaledVector(focusDirection, 2.4);
+    loveHeartGroup.position.set(0, 0, 0);
     loveHeartGroup.scale.set(heartScale, heartScale, heartScale);
     loveHeartGroup.lookAt(camera.position);
     loveHeartMaterial.opacity = loveHeartAmount;
 
-    loveMessage.position.copy(camera.position)
-      .addScaledVector(focusDirection, 2.4)
-      .addScaledVector(cameraDown, 1.08);
+    cameraUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    loveMessage.position.set(0, 0, 0).addScaledVector(cameraUp, 1.35);
     loveMessage.material.opacity = Math.max(0, loveHeartAmount * 1.5 - 0.5);
   }
 
