@@ -200,6 +200,22 @@ body.intro #skipIntro {
 body.intro #musicHint:not(.off) {
   opacity: 1;
 }
+#ver {
+  position: fixed;
+  left: 12px;
+  bottom: 10px;
+  z-index: 26;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #ffd6ea;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+body.intro #ver {
+  opacity: 0.5;
+}
 #fade {
   position: fixed;
   inset: 0;
@@ -219,6 +235,7 @@ body.intro #musicHint:not(.off) {
 
 <button id="skipIntro">Saltar intro ➜</button>
 <div id="musicHint">Toca la pantalla para la música 🎵</div>
+<div id="ver">v9</div>
 <div id="fade"></div>
 
 <div id="hud">
@@ -1270,7 +1287,7 @@ introDustGeometry.setAttribute('position', new THREE.BufferAttribute(introDustPo
 introDustGeometry.setAttribute('color', new THREE.BufferAttribute(introDustColors, 3));
 
 const introDustMaterial = new THREE.PointsMaterial({
-  size: 0.085,
+  size: 0.095,
   map: introDotTexture,
   vertexColors: true,
   transparent: true,
