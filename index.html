@@ -1151,8 +1151,63 @@ const introGroup = new THREE.Group();
 introScene.add(introGroup);
 
 const INTRO_SPAN = 110;
-const INTRO_DURATION = 9.5;
+const INTRO_DURATION = 12;
 const introColors = [0xff4f8b, 0xff8fd0, 0xb46bff, 0x7a5cff, 0x4fd8ff, 0xffd166];
+const introCss = ['#ff4f8b', '#ff8fd0', '#b46bff', '#7a5cff', '#4fd8ff', '#ffd166'];
+
+// Pared del tunel: franjas de colores y lineas de velocidad
+function createTunnelTexture() {
+  const tunnelCanvas = document.createElement('canvas');
+  tunnelCanvas.width = 256;
+  tunnelCanvas.height = 256;
+  const ctx = tunnelCanvas.getContext('2d');
+
+  ctx.fillStyle = '#0b0016';
+  ctx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 16; i++) {
+    const x = (i / 16) * 256;
+    const band = ctx.createLinearGradient(x - 16, 0, x + 16, 0);
+    band.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    band.addColorStop(0.5, introCss[i % introCss.length]);
+    band.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(x - 16, 0, 32, 256);
+  }
+
+  for (let i = 0; i < 120; i++) {
+    const x = Math.random() * 256;
+    const w = 0.5 + Math.random() * 1.8;
+    ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.05 + Math.random() * 0.25).toFixed(3) + ')';
+    ctx.fillRect(x, 0, w, 256);
+  }
+
+  const texture = new THREE.CanvasTexture(tunnelCanvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 2);
+  return texture;
+}
+
+const tunnelTexture = createTunnelTexture();
+
+const tunnelWallPivot = new THREE.Group();
+introGroup.add(tunnelWallPivot);
+
+const tunnelWall = new THREE.Mesh(
+  new THREE.CylinderGeometry(3.2, 3.2, 150, 64, 1, true),
+  new THREE.MeshBasicMaterial({
+    map: tunnelTexture,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.BackSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  })
+);
+tunnelWall.rotation.x = Math.PI / 2;
+tunnelWall.position.z = -62;
+tunnelWallPivot.add(tunnelWall);
 
 // Anillos de colores que forman el tunel
 const introRings = [];
@@ -1160,11 +1215,11 @@ const introRingCount = 80;
 
 for (let i = 0; i < introRingCount; i++) {
   const radius = 2.3 + Math.sin(i * 0.55) * 0.45;
-  const ringGeometry = new THREE.TorusGeometry(radius, 0.03, 6, 64);
+  const ringGeometry = new THREE.TorusGeometry(radius, 0.055, 8, 72);
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: introColors[i % introColors.length],
     transparent: true,
-    opacity: 0.5,
+    opacity: 0.6,
     blending: THREE.AdditiveBlending,
     depthWrite: false
   });
@@ -1246,18 +1301,18 @@ introGroup.add(introHearts);
 
 // Textos que aparecen dentro del gusano
 const INTRO_TEXTS = [
-  'Celisbeth',
-  'Te quiero siempre',
-  'Mi amor',
-  'Eres mi universo',
-  'Mi niña',
-  'Celisbeth',
-  'Siempre tú',
-  'Te amo',
-  'Mi bebe',
-  'Contigo',
-  'Infinito',
-  'Celisbeth, te quiero'
+  'Celisbeth te quiero',
+  'Celisbeth te deseo',
+  'Celisbeth eres la única',
+  'Celisbeth te amo',
+  'Celisbeth eres mi universo',
+  'Celisbeth siempre tú',
+  'Celisbeth mi amor',
+  'Celisbeth mi bebe',
+  'Celisbeth eres mi lugar favorito',
+  'Celisbeth contigo siempre',
+  'Celisbeth eres mi sueño',
+  'Celisbeth te quiero siempre'
 ];
 
 const introWords = [];
@@ -1267,22 +1322,21 @@ INTRO_TEXTS.forEach((text, index) => {
     map: createWordTexture(text),
     transparent: true,
     depthWrite: false,
-    opacity: 0.9
+    opacity: 1
   }));
 
   const angle = index * 1.05;
-  const radius = 1.45 + (index % 3) * 0.35;
-  const isName = text === 'Celisbeth';
+  const radius = index === 0 ? 0 : 1.35 + (index % 3) * 0.3;
 
   sprite.position.set(
-    Math.cos(angle) * radius,
-    Math.sin(angle) * radius * 0.7,
-    -8 - index * 8.2
+    index === 0 ? 0 : Math.cos(angle) * radius,
+    index === 0 ? 0.1 : Math.sin(angle) * radius * 0.7,
+    -8 - index * 8.6
   );
 
-  const width = isName ? 2.7 : 1.75;
+  const width = index === 0 ? 3.6 : (text.length > 20 ? 2.9 : 2.4);
   sprite.scale.set(width, width * 0.25, 1);
-  sprite.userData = { base: 0.9, phase: index };
+  sprite.userData = { base: 1, phase: index, speedFactor: index === 0 ? 0.28 : 0.5 };
 
   introGroup.add(sprite);
   introWords.push(sprite);
@@ -1298,10 +1352,10 @@ const introGlow = new THREE.Sprite(new THREE.SpriteMaterial({
   opacity: 0.9
 }));
 introGlow.position.set(0, 0, -96);
-introGlow.scale.set(26, 26, 1);
+introGlow.scale.set(36, 36, 1);
 introGroup.add(introGlow);
 
-const introState = { active: true, time: 0, ending: false, speed: 24 };
+const introState = { active: true, time: 0, ending: false, speed: 11 };
 const fadeElement = document.getElementById('fade');
 const skipIntroButton = document.getElementById('skipIntro');
 const introDisabled = new URLSearchParams(window.location.search).get('intro') === '0';
@@ -1347,8 +1401,12 @@ function updateIntro(dt, elapsed) {
     if (ring.position.z > 6) ring.position.z -= INTRO_SPAN;
 
     const near = Math.max(0, Math.min(1, (6 - ring.position.z) / 4));
-    ring.material.opacity = (0.3 + Math.sin(elapsed * 2 + ring.position.z * 0.25) * 0.16) * near;
+    ring.material.opacity = (0.55 + Math.sin(elapsed * 2 + ring.position.z * 0.25) * 0.2) * near;
   });
+
+  // La pared del tunel gira y sus lineas avanzan
+  tunnelWallPivot.rotation.z = elapsed * 0.5;
+  tunnelTexture.offset.y = -elapsed * 0.4;
 
   const starPositions = introStarGeometry.attributes.position.array;
   for (let i = 0; i < introStarCount; i++) {
@@ -1381,11 +1439,11 @@ function updateIntro(dt, elapsed) {
   introHeartGeometry.attributes.position.needsUpdate = true;
 
   introWords.forEach((sprite) => {
-    sprite.position.z += step * 1.05;
+    sprite.position.z += step * sprite.userData.speedFactor;
     if (sprite.position.z > 7) sprite.position.z -= INTRO_SPAN;
 
     const near = Math.max(0, Math.min(1, (7 - sprite.position.z) / 3.5));
-    const breathe = 0.72 + Math.sin(elapsed * 2.1 + sprite.userData.phase) * 0.28;
+    const breathe = 0.85 + Math.sin(elapsed * 2.1 + sprite.userData.phase) * 0.15;
     sprite.material.opacity = sprite.userData.base * breathe * near;
   });
 
@@ -1397,7 +1455,7 @@ function updateIntro(dt, elapsed) {
   introCamera.lookAt(Math.sin(elapsed * 0.5) * 0.7, Math.cos(elapsed * 0.55) * 0.5, -30);
 
   const glowPulse = 1 + Math.sin(elapsed * 2.4) * 0.08;
-  introGlow.scale.set(26 * glowPulse, 26 * glowPulse, 1);
+  introGlow.scale.set(36 * glowPulse, 36 * glowPulse, 1);
   introGlow.material.opacity = 0.75 + Math.sin(elapsed * 2.4) * 0.15;
 
   if (introState.time > INTRO_DURATION) endIntro();
