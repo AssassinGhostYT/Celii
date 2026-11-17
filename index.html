@@ -691,7 +691,7 @@ loveMessage.renderOrder = 20;
 loveMessage.visible = false;
 scene.add(loveMessage);
 
-const loveHeartCount = 4200;
+const loveHeartCount = 10000;
 const loveHeartGeometry = new THREE.BufferGeometry();
 const loveHeartPositions = new Float32Array(loveHeartCount * 3);
 const loveHeartColors = new Float32Array(loveHeartCount * 3);
@@ -699,14 +699,17 @@ const loveHeartColors = new Float32Array(loveHeartCount * 3);
 for (let i = 0; i < loveHeartCount; i++) {
   const i3 = i * 3;
   const t = Math.random() * Math.PI * 2;
-  const fill = Math.pow(Math.random(), 0.35);
+
+  // 40% de las partículas van en el borde para que se lea bien la forma
+  const onEdge = Math.random() < 0.4;
+  const fill = onEdge ? 0.94 + Math.random() * 0.06 : Math.pow(Math.random(), 0.4);
 
   loveHeartPositions[i3] = 16 * Math.pow(Math.sin(t), 3) * 0.03 * fill;
   loveHeartPositions[i3 + 1] = (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 0.03 * fill;
   loveHeartPositions[i3 + 2] = (Math.random() - 0.5) * 0.06;
 
   const color = new THREE.Color();
-  color.setHSL(0.9 + Math.random() * 0.06, 0.95, 0.62 + Math.random() * 0.25);
+  color.setHSL(0.9 + Math.random() * 0.06, 0.95, 0.75 + Math.random() * 0.23);
   loveHeartColors[i3] = color.r;
   loveHeartColors[i3 + 1] = color.g;
   loveHeartColors[i3 + 2] = color.b;
@@ -716,7 +719,7 @@ loveHeartGeometry.setAttribute('position', new THREE.BufferAttribute(loveHeartPo
 loveHeartGeometry.setAttribute('color', new THREE.BufferAttribute(loveHeartColors, 3));
 
 const loveHeartMaterial = new THREE.PointsMaterial({
-  size: 0.028,
+  size: 0.052,
   map: heartTexture,
   transparent: true,
   depthWrite: false,
@@ -733,6 +736,20 @@ const loveHeartGroup = new THREE.Group();
 loveHeartGroup.add(loveHeartPoints);
 loveHeartGroup.visible = false;
 scene.add(loveHeartGroup);
+
+// Resplandor rosa detrás del corazón para que resalte
+const loveGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: createGlowTexture(),
+  blending: THREE.AdditiveBlending,
+  transparent: true,
+  depthWrite: false,
+  depthTest: false,
+  opacity: 0
+}));
+loveGlow.scale.set(3.4, 3.4, 1);
+loveGlow.position.set(0, 0, 0);
+loveGlow.visible = false;
+scene.add(loveGlow);
 
 let loveHeartVisible = false;
 let loveHeartAmount = 0;
@@ -1037,15 +1054,21 @@ const tick = () => {
 
   loveHeartGroup.visible = loveHeartAmount > 0.01;
   loveMessage.visible = loveHeartAmount > 0.05;
+  loveGlow.visible = loveHeartAmount > 0.01;
 
   if (loveHeartGroup.visible) {
     const pulse = 1 + Math.sin(elapsedTime * 3) * 0.05;
-    const heartScale = loveHeartAmount * 1.6 * pulse;
+    const heartScale = loveHeartAmount * 1.75 * pulse;
 
     loveHeartGroup.position.set(0, 0, 0);
     loveHeartGroup.scale.set(heartScale, heartScale, heartScale);
     loveHeartGroup.lookAt(camera.position);
     loveHeartMaterial.opacity = loveHeartAmount;
+
+    const glowPulse = 1 + Math.sin(elapsedTime * 3) * 0.1;
+    const glowSize = 3.4 * loveHeartAmount * glowPulse;
+    loveGlow.scale.set(glowSize, glowSize, 1);
+    loveGlow.material.opacity = loveHeartAmount * 0.75;
 
     cameraUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
     loveMessage.position.set(0, 0, 0).addScaledVector(cameraUp, 1.35);
