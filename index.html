@@ -803,117 +803,46 @@ function registerOpening(sticker) {
 }
 
 // -------------------------------------------------------------
-// 5.4 MUSICA ROMANTICA (generada, con boton de play)
+// 5.4 MUSICA ROMANTICA (nuestra cancion, con boton de play)
 // -------------------------------------------------------------
 const musicButton = document.getElementById('musicBtn');
-let audioCtx = null;
-let musicGain = null;
+
+const song = new Audio('musica.m4a');
+song.loop = true;
+song.preload = 'auto';
+song.volume = 0.6;
+
 let musicOn = false;
-let musicStep = 0;
-let nextStepTime = 0;
 
-const chordProgression = [
-  [130.81, 164.81, 196.00, 261.63],
-  [98.00, 123.47, 146.83, 196.00],
-  [110.00, 130.81, 164.81, 220.00],
-  [87.31, 110.00, 130.81, 174.61]
-];
-
-function playPluck(frequency, time, duration, volume) {
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = frequency;
-
-  gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(volume, time + 0.03);
-  gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-
-  osc.connect(gain);
-  gain.connect(musicGain);
-  osc.start(time);
-  osc.stop(time + duration + 0.05);
-}
-
-function playPad(frequencies, time, duration) {
-  frequencies.forEach((frequency) => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = frequency / 2;
-
-    gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.linearRampToValueAtTime(0.05, time + 1.1);
-    gain.gain.linearRampToValueAtTime(0.0001, time + duration);
-
-    osc.connect(gain);
-    gain.connect(musicGain);
-    osc.start(time);
-    osc.stop(time + duration + 0.1);
-  });
-}
-
-function scheduleMusic() {
-  if (!audioCtx || !musicOn) return;
-
-  while (nextStepTime < audioCtx.currentTime + 0.35) {
-    const chord = chordProgression[Math.floor(musicStep / 8) % chordProgression.length];
-    const pattern = [0, 1, 2, 3, 2, 1, 2, 3];
-    const note = chord[pattern[musicStep % 8]];
-
-    playPluck(note * 2, nextStepTime, 1.4, 0.16);
-
-    if (musicStep % 16 === 0) {
-      playPluck(chord[0], nextStepTime, 2.2, 0.1);
-    }
-    if (musicStep % 8 === 0) {
-      playPad(chord, nextStepTime, 3.6);
-    }
-
-    nextStepTime += 0.42;
-    musicStep++;
-  }
-}
+song.addEventListener('error', () => {
+  musicOn = false;
+  musicButton.textContent = '×';
+  musicButton.classList.remove('on');
+  musicButton.title = 'No se pudo cargar la cancion';
+});
 
 musicButton.addEventListener('click', () => {
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    audioCtx = new AudioContextClass();
-
-    musicGain = audioCtx.createGain();
-    musicGain.gain.value = 0.55;
-    musicGain.connect(audioCtx.destination);
-
-    const delay = audioCtx.createDelay(1.0);
-    delay.delayTime.value = 0.34;
-    const feedback = audioCtx.createGain();
-    feedback.gain.value = 0.28;
-    const wet = audioCtx.createGain();
-    wet.gain.value = 0.35;
-
-    musicGain.connect(delay);
-    delay.connect(feedback);
-    feedback.connect(delay);
-    delay.connect(wet);
-    wet.connect(audioCtx.destination);
-
-    nextStepTime = audioCtx.currentTime + 0.1;
-    setInterval(scheduleMusic, 100);
-  }
-
   if (musicOn) {
-    audioCtx.suspend();
+    song.pause();
     musicOn = false;
     musicButton.textContent = '♪';
     musicButton.classList.remove('on');
-  } else {
-    audioCtx.resume();
-    if (nextStepTime < audioCtx.currentTime) {
-      nextStepTime = audioCtx.currentTime + 0.1;
-    }
-    musicOn = true;
-    musicButton.textContent = '♫';
-    musicButton.classList.add('on');
+    return;
+  }
+
+  musicButton.title = 'Pausar musica';
+  musicOn = true;
+  musicButton.textContent = '♫';
+  musicButton.classList.add('on');
+
+  const playing = song.play();
+  if (playing && typeof playing.catch === 'function') {
+    playing.catch(() => {
+      musicOn = false;
+      musicButton.textContent = '×';
+      musicButton.classList.remove('on');
+      musicButton.title = 'No se pudo cargar la cancion';
+    });
   }
 });
 
