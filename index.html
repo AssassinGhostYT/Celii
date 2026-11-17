@@ -182,23 +182,43 @@ body.intro #skipIntro {
   left: 50%;
   bottom: 78px;
   transform: translateX(-50%);
-  z-index: 26;
-  padding: 8px 18px;
-  border: 1px solid rgba(255, 143, 208, 0.7);
+  z-index: 15;
+  padding: 11px 24px;
+  border: 2px solid #ff6fb5;
   border-radius: 999px;
-  background: rgba(40, 0, 55, 0.55);
-  color: #ffd6ea;
+  background: rgba(255, 79, 139, 0.22);
+  color: #fff0f8;
   font-family: Arial, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   letter-spacing: 0.5px;
   white-space: nowrap;
+  cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease;
-  backdrop-filter: blur(4px);
+  transition: opacity 0.4s ease, transform 0.2s ease, background 0.2s ease;
+  box-shadow: 0 0 18px rgba(255, 79, 139, 0.55), inset 0 0 14px rgba(255, 143, 208, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
-body.intro #musicHint:not(.off) {
+#musicHint:not(.off) {
   opacity: 1;
+  pointer-events: auto;
+  animation: musicPulse 1.8s ease-in-out infinite;
+}
+#musicHint:active {
+  transform: translateX(-50%) scale(0.95);
+  background: rgba(255, 79, 139, 0.4);
+}
+@keyframes musicPulse {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(255, 79, 139, 0.55), inset 0 0 14px rgba(255, 143, 208, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(255, 79, 139, 0.95), inset 0 0 20px rgba(255, 143, 208, 0.45);
+  }
 }
 #ver {
   position: fixed;
@@ -234,8 +254,8 @@ body.intro #ver {
 <canvas class="webgl"></canvas>
 
 <button id="skipIntro">Saltar intro ➜</button>
-<div id="musicHint">Toca la pantalla para la música 🎵</div>
-<div id="ver">v9</div>
+<button id="musicHint" type="button">▶ Toca aquí para la música</button>
+<div id="ver">v10</div>
 <div id="fade"></div>
 
 <div id="hud">
@@ -1085,77 +1105,85 @@ const musicHint = document.getElementById('musicHint');
 const song = new Audio('musica.m4a');
 song.loop = true;
 song.preload = 'auto';
-song.volume = 0.6;
+song.setAttribute('playsinline', '');
+song.setAttribute('webkit-playsinline', '');
+document.body.appendChild(song);
 
-let musicOn = false;
-let musicFade = null;
-let autoMusicArmed = true;
+function updateMusicUI() {
+  const playing = !song.paused && !song.ended;
+
+  musicButton.textContent = playing ? '♫' : '♪';
+  musicButton.classList.toggle('on', playing);
+  musicButton.title = playing ? 'Pausar musica' : 'Poner musica';
+
+  if (musicHint) musicHint.classList.toggle('off', playing);
+}
 
 function playSong() {
-  if (musicOn) return;
+  song.volume = 0.6;
 
-  musicButton.title = 'Pausar musica';
-  musicOn = true;
-  musicButton.textContent = '♫';
-  musicButton.classList.add('on');
-  if (musicHint) musicHint.classList.add('off');
+  const attempt = song.play();
 
-  song.volume = 0;
-  const playing = song.play();
-
-  if (playing && typeof playing.catch === 'function') {
-    playing.catch(() => {
-      musicOn = false;
-      musicButton.textContent = '♪';
-      musicButton.classList.remove('on');
-      musicButton.title = 'Toca para la musica';
-      if (musicHint) musicHint.classList.remove('off');
+  if (attempt && typeof attempt.then === 'function') {
+    attempt.then(updateMusicUI).catch(() => {
+      updateMusicUI();
     });
+  } else {
+    updateMusicUI();
   }
-
-  const startedAt = performance.now();
-  if (musicFade) cancelAnimationFrame(musicFade);
-
-  const fadeStep = (now) => {
-    const t = Math.min(1, (now - startedAt) / 2200);
-    song.volume = 0.6 * t;
-    if (t < 1 && musicOn) musicFade = requestAnimationFrame(fadeStep);
-  };
-
-  musicFade = requestAnimationFrame(fadeStep);
 }
 
 function pauseSong() {
   song.pause();
-  musicOn = false;
-  musicButton.textContent = '♪';
-  musicButton.classList.remove('on');
-  musicButton.title = 'Poner musica';
-  if (musicHint) musicHint.classList.remove('off');
+  updateMusicUI();
 }
 
 musicButton.addEventListener('click', () => {
-  if (musicOn) pauseSong();
-  else playSong();
+  if (song.paused) playSong();
+  else pauseSong();
 });
 
+if (musicHint) {
+  musicHint.addEventListener('click', () => {
+    playSong();
+  });
+}
+
+song.addEventListener('playing', updateMusicUI);
+song.addEventListener('pause', updateMusicUI);
+
 song.addEventListener('error', () => {
-  musicOn = false;
   musicButton.textContent = '×';
   musicButton.classList.remove('on');
   musicButton.title = 'No se pudo cargar la cancion';
+
+  if (musicHint) {
+    musicHint.textContent = 'No se pudo cargar la música';
+    musicHint.classList.remove('off');
+  }
 });
 
-// La musica arranca sola al entrar y tambien con el primer toque en la pantalla
+// Intento de arranque automatico (si el navegador lo permite)
 playSong();
 
+// Tambien arranca con el primer toque en cualquier parte de la pantalla
+let autoMusicArmed = true;
+
 window.addEventListener('pointerdown', (event) => {
-  if (!autoMusicArmed || musicOn) return;
-  if (event.target && event.target.closest && event.target.closest('#hudButtons, #letter')) return;
+  if (!autoMusicArmed || !song.paused) return;
+  if (event.target && event.target.closest && event.target.closest('#hudButtons, #letter, #musicHint')) return;
 
   autoMusicArmed = false;
   playSong();
 });
+
+window.addEventListener('touchstart', (event) => {
+  if (!autoMusicArmed || !song.paused) return;
+  if (event.target && event.target.closest && event.target.closest('#hudButtons, #letter, #musicHint')) return;
+
+  autoMusicArmed = false;
+  playSong();
+}, { passive: true });
 
 // 5.5 LA CARTA (boton 💌)
 // -------------------------------------------------------------
