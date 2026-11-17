@@ -177,6 +177,29 @@ body.intro #skipIntro {
   opacity: 1;
   pointer-events: auto;
 }
+#musicHint {
+  position: fixed;
+  left: 50%;
+  bottom: 78px;
+  transform: translateX(-50%);
+  z-index: 26;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 143, 208, 0.7);
+  border-radius: 999px;
+  background: rgba(40, 0, 55, 0.55);
+  color: #ffd6ea;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  backdrop-filter: blur(4px);
+}
+body.intro #musicHint:not(.off) {
+  opacity: 1;
+}
 #fade {
   position: fixed;
   inset: 0;
@@ -195,6 +218,7 @@ body.intro #skipIntro {
 <canvas class="webgl"></canvas>
 
 <button id="skipIntro">Saltar intro ➜</button>
+<div id="musicHint">Toca la pantalla para la música 🎵</div>
 <div id="fade"></div>
 
 <div id="hud">
@@ -1039,6 +1063,7 @@ function registerOpening(sticker) {
 // 5.4 MUSICA ROMANTICA (nuestra cancion, con boton de play)
 // -------------------------------------------------------------
 const musicButton = document.getElementById('musicBtn');
+const musicHint = document.getElementById('musicHint');
 
 const song = new Audio('musica.m4a');
 song.loop = true;
@@ -1046,6 +1071,56 @@ song.preload = 'auto';
 song.volume = 0.6;
 
 let musicOn = false;
+let musicFade = null;
+let autoMusicArmed = true;
+
+function playSong() {
+  if (musicOn) return;
+
+  musicButton.title = 'Pausar musica';
+  musicOn = true;
+  musicButton.textContent = '♫';
+  musicButton.classList.add('on');
+  if (musicHint) musicHint.classList.add('off');
+
+  song.volume = 0;
+  const playing = song.play();
+
+  if (playing && typeof playing.catch === 'function') {
+    playing.catch(() => {
+      musicOn = false;
+      musicButton.textContent = '♪';
+      musicButton.classList.remove('on');
+      musicButton.title = 'Toca para la musica';
+      if (musicHint) musicHint.classList.remove('off');
+    });
+  }
+
+  const startedAt = performance.now();
+  if (musicFade) cancelAnimationFrame(musicFade);
+
+  const fadeStep = (now) => {
+    const t = Math.min(1, (now - startedAt) / 2200);
+    song.volume = 0.6 * t;
+    if (t < 1 && musicOn) musicFade = requestAnimationFrame(fadeStep);
+  };
+
+  musicFade = requestAnimationFrame(fadeStep);
+}
+
+function pauseSong() {
+  song.pause();
+  musicOn = false;
+  musicButton.textContent = '♪';
+  musicButton.classList.remove('on');
+  musicButton.title = 'Poner musica';
+  if (musicHint) musicHint.classList.remove('off');
+}
+
+musicButton.addEventListener('click', () => {
+  if (musicOn) pauseSong();
+  else playSong();
+});
 
 song.addEventListener('error', () => {
   musicOn = false;
@@ -1054,32 +1129,17 @@ song.addEventListener('error', () => {
   musicButton.title = 'No se pudo cargar la cancion';
 });
 
-musicButton.addEventListener('click', () => {
-  if (musicOn) {
-    song.pause();
-    musicOn = false;
-    musicButton.textContent = '♪';
-    musicButton.classList.remove('on');
-    return;
-  }
+// La musica arranca sola al entrar y tambien con el primer toque en la pantalla
+playSong();
 
-  musicButton.title = 'Pausar musica';
-  musicOn = true;
-  musicButton.textContent = '♫';
-  musicButton.classList.add('on');
+window.addEventListener('pointerdown', (event) => {
+  if (!autoMusicArmed || musicOn) return;
+  if (event.target && event.target.closest && event.target.closest('#hudButtons, #letter')) return;
 
-  const playing = song.play();
-  if (playing && typeof playing.catch === 'function') {
-    playing.catch(() => {
-      musicOn = false;
-      musicButton.textContent = '×';
-      musicButton.classList.remove('on');
-      musicButton.title = 'No se pudo cargar la cancion';
-    });
-  }
+  autoMusicArmed = false;
+  playSong();
 });
 
-// -------------------------------------------------------------
 // 5.5 LA CARTA (boton 💌)
 // -------------------------------------------------------------
 const letterButton = document.getElementById('letterBtn');
@@ -1152,74 +1212,89 @@ introScene.add(introGroup);
 
 const INTRO_SPAN = 110;
 const INTRO_DURATION = 12;
-const introColors = [0xff4f8b, 0xff8fd0, 0xb46bff, 0x7a5cff, 0x4fd8ff, 0xffd166];
-const introCss = ['#ff4f8b', '#ff8fd0', '#b46bff', '#7a5cff', '#4fd8ff', '#ffd166'];
+const introColors = [0xff2d78, 0xff4f8b, 0xff6fb5, 0xff8fd0, 0xffb3d9];
 
-// Pared del tunel: franjas de colores y lineas de velocidad
-function createTunnelTexture() {
-  const tunnelCanvas = document.createElement('canvas');
-  tunnelCanvas.width = 256;
-  tunnelCanvas.height = 256;
-  const ctx = tunnelCanvas.getContext('2d');
+// Puntito suave para las particulas
+function createDotTexture() {
+  const dotCanvas = document.createElement('canvas');
+  dotCanvas.width = 64;
+  dotCanvas.height = 64;
+  const ctx = dotCanvas.getContext('2d');
 
-  ctx.fillStyle = '#0b0016';
-  ctx.fillRect(0, 0, 256, 256);
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  grad.addColorStop(0.35, 'rgba(255, 190, 225, 0.85)');
+  grad.addColorStop(0.7, 'rgba(255, 90, 170, 0.35)');
+  grad.addColorStop(1, 'rgba(255, 60, 150, 0)');
 
-  for (let i = 0; i < 16; i++) {
-    const x = (i / 16) * 256;
-    const band = ctx.createLinearGradient(x - 16, 0, x + 16, 0);
-    band.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    band.addColorStop(0.5, introCss[i % introCss.length]);
-    band.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = band;
-    ctx.fillRect(x - 16, 0, 32, 256);
-  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
 
-  for (let i = 0; i < 120; i++) {
-    const x = Math.random() * 256;
-    const w = 0.5 + Math.random() * 1.8;
-    ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.05 + Math.random() * 0.25).toFixed(3) + ')';
-    ctx.fillRect(x, 0, w, 256);
-  }
-
-  const texture = new THREE.CanvasTexture(tunnelCanvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(3, 2);
-  return texture;
+  return new THREE.CanvasTexture(dotCanvas);
 }
 
-const tunnelTexture = createTunnelTexture();
+const introDotTexture = createDotTexture();
 
-const tunnelWallPivot = new THREE.Group();
-introGroup.add(tunnelWallPivot);
+// Remolino de particulas rosas que forma el tunel
+const introDustCount = 6500;
+const introDustGeometry = new THREE.BufferGeometry();
+const introDustPositions = new Float32Array(introDustCount * 3);
+const introDustColors = new Float32Array(introDustCount * 3);
+const introDustRadius = new Float32Array(introDustCount);
+const introDustAngle = new Float32Array(introDustCount);
+const introDustZ = new Float32Array(introDustCount);
+const introDustSpeed = new Float32Array(introDustCount);
 
-const tunnelWall = new THREE.Mesh(
-  new THREE.CylinderGeometry(3.2, 3.2, 150, 64, 1, true),
-  new THREE.MeshBasicMaterial({
-    map: tunnelTexture,
-    transparent: true,
-    opacity: 0.85,
-    side: THREE.BackSide,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  })
-);
-tunnelWall.rotation.x = Math.PI / 2;
-tunnelWall.position.z = -62;
-tunnelWallPivot.add(tunnelWall);
+for (let i = 0; i < introDustCount; i++) {
+  const i3 = i * 3;
+  const radius = 1.15 + Math.pow(Math.random(), 0.65) * 2.35;
+  const angle = Math.random() * Math.PI * 2;
 
-// Anillos de colores que forman el tunel
+  introDustRadius[i] = radius;
+  introDustAngle[i] = angle;
+  introDustZ[i] = -Math.random() * INTRO_SPAN;
+  introDustSpeed[i] = 0.55 + Math.random() * 0.9;
+
+  introDustPositions[i3] = Math.cos(angle) * radius;
+  introDustPositions[i3 + 1] = Math.sin(angle) * radius;
+  introDustPositions[i3 + 2] = introDustZ[i];
+
+  const color = new THREE.Color();
+  color.setHSL(0.88 + Math.random() * 0.08, 0.9, 0.55 + Math.random() * 0.4);
+  introDustColors[i3] = color.r;
+  introDustColors[i3 + 1] = color.g;
+  introDustColors[i3 + 2] = color.b;
+}
+
+introDustGeometry.setAttribute('position', new THREE.BufferAttribute(introDustPositions, 3));
+introDustGeometry.setAttribute('color', new THREE.BufferAttribute(introDustColors, 3));
+
+const introDustMaterial = new THREE.PointsMaterial({
+  size: 0.085,
+  map: introDotTexture,
+  vertexColors: true,
+  transparent: true,
+  opacity: 0.95,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  sizeAttenuation: true
+});
+
+const introDust = new THREE.Points(introDustGeometry, introDustMaterial);
+introDust.frustumCulled = false;
+introGroup.add(introDust);
+
+// Anillos rosas del tunel
 const introRings = [];
-const introRingCount = 80;
+const introRingCount = 60;
 
 for (let i = 0; i < introRingCount; i++) {
   const radius = 2.3 + Math.sin(i * 0.55) * 0.45;
-  const ringGeometry = new THREE.TorusGeometry(radius, 0.055, 8, 72);
+  const ringGeometry = new THREE.TorusGeometry(radius, 0.04, 8, 72);
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: introColors[i % introColors.length],
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.5,
     blending: THREE.AdditiveBlending,
     depthWrite: false
   });
@@ -1254,8 +1329,9 @@ for (let i = 0; i < introStarCount; i++) {
 introStarGeometry.setAttribute('position', new THREE.BufferAttribute(introStarPositions, 3));
 
 const introStarMaterial = new THREE.PointsMaterial({
-  size: 0.06,
-  color: 0xffe0f0,
+  size: 0.11,
+  map: introDotTexture,
+  color: 0xffb3d9,
   transparent: true,
   opacity: 0.9,
   depthWrite: false,
@@ -1286,9 +1362,9 @@ for (let i = 0; i < introHeartCount; i++) {
 introHeartGeometry.setAttribute('position', new THREE.BufferAttribute(introHeartPositions, 3));
 
 const introHeartMaterial = new THREE.PointsMaterial({
-  size: 0.16,
+  size: 0.2,
   map: heartTexture,
-  color: 0xff8fc4,
+  color: 0xff6fb5,
   transparent: true,
   opacity: 0.85,
   depthWrite: false,
@@ -1345,7 +1421,7 @@ INTRO_TEXTS.forEach((text, index) => {
 // Luz al final del tunel
 const introGlow = new THREE.Sprite(new THREE.SpriteMaterial({
   map: createGlowTexture(),
-  color: 0xffa8d8,
+  color: 0xff4f8b,
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
@@ -1404,9 +1480,20 @@ function updateIntro(dt, elapsed) {
     ring.material.opacity = (0.55 + Math.sin(elapsed * 2 + ring.position.z * 0.25) * 0.2) * near;
   });
 
-  // La pared del tunel gira y sus lineas avanzan
-  tunnelWallPivot.rotation.z = elapsed * 0.5;
-  tunnelTexture.offset.y = -elapsed * 0.4;
+  // Remolino de particulas rosas girando
+  const dustPositions = introDustGeometry.attributes.position.array;
+  for (let i = 0; i < introDustCount; i++) {
+    const i3 = i * 3;
+
+    introDustAngle[i] += dt * (0.35 + (i % 5) * 0.06);
+    introDustZ[i] += step * introDustSpeed[i] * 1.5;
+    if (introDustZ[i] > 6) introDustZ[i] -= INTRO_SPAN;
+
+    dustPositions[i3] = Math.cos(introDustAngle[i]) * introDustRadius[i];
+    dustPositions[i3 + 1] = Math.sin(introDustAngle[i]) * introDustRadius[i];
+    dustPositions[i3 + 2] = introDustZ[i];
+  }
+  introDustGeometry.attributes.position.needsUpdate = true;
 
   const starPositions = introStarGeometry.attributes.position.array;
   for (let i = 0; i < introStarCount; i++) {
